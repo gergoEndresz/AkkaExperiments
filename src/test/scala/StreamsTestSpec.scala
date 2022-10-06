@@ -15,7 +15,6 @@ import scala.language.postfixOps
 class StreamsTestSpec extends TestKit(ActorSystem("Dagobbah"))
   with AnyWordSpecLike
   with Matchers
-  with ScalaFutures
   with BeforeAndAfterAll {
 
   def expensiveOperation(item: Int) = {
@@ -30,7 +29,6 @@ class StreamsTestSpec extends TestKit(ActorSystem("Dagobbah"))
     pair._1 * 2 -> pair._2
   }
 
-  override implicit def patienceConfig: PatienceConfig = PatienceConfig(50 seconds, 50 millis)
 
   override def afterAll(): Unit = {
     super.afterAll()
@@ -38,10 +36,25 @@ class StreamsTestSpec extends TestKit(ActorSystem("Dagobbah"))
   }
 
   implicit val ex = system.dispatcher
-  val parallelItems = 1
+  val parallelItems = 5
 
   val ackExtender = new AckExtenderImpl
   "wireTapMat within a flatmapMerge " should {
+    "behave like this" in {
+      Source(1 to 5)
+        .alsoTo(Sink.foreach { x =>
+          Thread.sleep(100)
+          println(s"elem:$x alsoTo")
+        }
+        )
+        .map { x =>
+          println(s"elem:$x map")
+          x
+        }
+        .to(Sink.foreach(x => println(s"elem:$x to")))
+        .run()
+    }
+
     "not behave like this" in {
       println("Hello world")
       // Observe the elapsed time for extending item msgs!
@@ -58,12 +71,11 @@ class StreamsTestSpec extends TestKit(ActorSystem("Dagobbah"))
 
       Await.result(eventualDone, 5.minutes)
     }
-  }
 
     val sideSink: Sink[(Int, Long), Cancellable] = new AckExtenderImpl2().sink
 
-    val bc: Flow[(Int, Long), (Int, Long), NotUsed] = Flow.fromGraph(GraphDSL.create(){
-      implicit builder =>  {
+    val bc: Flow[(Int, Long), (Int, Long), NotUsed] = Flow.fromGraph(GraphDSL.create() {
+      implicit builder => {
         import GraphDSL.Implicits._
 
         val broadcast = builder.add(Broadcast[(Int, Long)](2))
@@ -75,7 +87,7 @@ class StreamsTestSpec extends TestKit(ActorSystem("Dagobbah"))
       }
     })
 
-    "but like this" in {
+    "but could be made to work like that" in {
       // Observe the elapsed time for extending item msgs!
       val testStart = System.currentTimeMillis()
       val eventualDone: Future[Done] =
@@ -90,4 +102,5 @@ class StreamsTestSpec extends TestKit(ActorSystem("Dagobbah"))
 
       Await.result(eventualDone, 5.minutes)
     }
+  }
 }
